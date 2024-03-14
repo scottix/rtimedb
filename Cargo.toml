@@ -1,0 +1,32 @@
+[package]
+name = "rtimedb"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "rtimedb"
+path = "src/bin/rtimedb.rs"
+
+[[bin]]
+name = "gen_csv"
+path = "src/bin/gen_csv.rs"
+
+[dependencies]
+bincode = "1.3.3"
+byteorder = "1.5.0"
+chrono = "0.4.35"
+clap = "4.5.2"
+csv = "1.3.0"
+rand = "0.8.5"
+serde = { version = "1.0.197", features = ["derive"] }
+tempfile = "3.10.1"
+tokio = { version = "1.36.0", features = ["full"] }
+tracing = "0.1.40"
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+uuid7 = { version = "0.7.2", features = ["serde", "uuid"] }
+
+[profile.release]
+debug = 1
+
+[rust]
+debuginfo-level = 1
