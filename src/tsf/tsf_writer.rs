@@ -1,21 +1,32 @@
-use std::{fs::{File, OpenOptions}, io, path::Path};
+use std::{fs::{self, File, OpenOptions}, io, path::PathBuf};
 
 use super::header::FileHeader;
 use super::segments::data::{ColumnDataCreator, SegmentData, SegmentColumnHeader, SegmentColumnData, EnumDataType, EnumDataEnc, EnumDataComp};
 
 pub struct TSFWriter {
   file: File,
+  file_path: PathBuf,
+  file_exists: bool,
   file_header: FileHeader,
   segment_data: SegmentData,
+  cleanup: bool,
 }
 
 impl TSFWriter {
-  pub fn new(file_path: &str) -> io::Result<Self> {
-    let file: File = OpenOptions::new()
-      .create(true)
-      .write(true)
-      .truncate(true)
-      .open(Path::new(file_path))?;
+  pub fn new(path: &str) -> io::Result<Self> {
+    let path_buf: PathBuf = PathBuf::from(path);
+    let file_exists: bool = path_buf.exists();
+
+    let file: File = if file_exists {
+      OpenOptions::new()
+        .append(true)
+        .open(&path_buf)?
+    } else {
+      OpenOptions::new()
+        .create(true)
+        .write(true)
+        .open(&path_buf)?
+    };
 
     let file_header: FileHeader = FileHeader::new();
     let segment_data: SegmentData = SegmentData::new()
@@ -23,12 +34,15 @@ impl TSFWriter {
 
     Ok(TSFWriter {
       file,
+      file_path: path_buf,
+      file_exists,
       file_header,
       segment_data,
+      cleanup: false,
     })
   }
 
-  pub fn add_column_header(&mut self, column_name: &str, column_type: EnumDataType, encoding: EnumDataEnc, compression: EnumDataComp) -> io::Result<()> {
+  pub fn add_column_header(&mut self, column_name: &str, column_type: EnumDataType, encoding: EnumDataEnc, compression: EnumDataComp) -> Result<(), String> {
     let header: SegmentColumnHeader = SegmentColumnHeader::new(
       column_name.to_string(),
       column_type,
@@ -36,17 +50,17 @@ impl TSFWriter {
       compression,
     );
     
-    self.segment_data.add_column_header(header);
+    self.segment_data.add_column_header(header, false)?;
 
     Ok(())
   }
 
-  pub fn add_column_data<T>(&mut self, column: Vec<T>, encoding: EnumDataEnc, compression: EnumDataComp) -> io::Result<()>
+  pub fn add_column_data<T>(&mut self, column: Vec<T>, encoding: EnumDataEnc, compression: EnumDataComp) -> Result<(), String>
   where
       T: ColumnDataCreator + Sized,
   {
       if column.is_empty() {
-          return Err(io::Error::new(io::ErrorKind::InvalidInput, "Column data empty"));
+          return Err("Column data empty".to_string());
       }
 
       // Using the trait to create the SegmentColumnData
@@ -56,12 +70,28 @@ impl TSFWriter {
       Ok(())
   }
 
+  pub fn try_save(&mut self) -> io::Result<()> {
+    self.cleanup = false;
+    if let Err(e) = self.save() {
+      self.cleanup = true;
+      return Err(e);
+    }
+    Ok(())
+  }
+
   // Save the SegmentData to the file
-  pub fn save(&mut self) -> io::Result<()> {
-    // Assume new file for now
+  fn save(&mut self) -> io::Result<()> {
     self.file_header.write_header(&mut self.file)?;
     self.segment_data.write_to_file(&mut self.file)?;
     Ok(())
+  }
+}
+
+impl Drop for TSFWriter {
+  fn drop(&mut self) {
+    if self.cleanup && !self.file_exists {
+      let _ = fs::remove_file(&self.file_path);
+    }
   }
 }
 
@@ -88,7 +118,8 @@ mod tests {
         let file_path: &str = temp_file.path().to_str().unwrap();
 
         let mut writer: TSFWriter = TSFWriter::new(file_path)?;
-        writer.add_column_header("temperature", EnumDataType::Int8, EnumDataEnc::None, EnumDataComp::None)?;
+        writer.add_column_header("temperature", EnumDataType::Int8, EnumDataEnc::None, EnumDataComp::None)
+          .map_err(|e: String| io::Error::new(io::ErrorKind::InvalidData, e))?;
         assert_eq!(writer.segment_data.get_column_count(), 1);
 
         Ok(())
@@ -100,10 +131,12 @@ mod tests {
         let file_path: &str = temp_file.path().to_str().unwrap();
 
         let mut writer: TSFWriter = TSFWriter::new(file_path)?;
-        writer.add_column_header("temperature", EnumDataType::Int8, EnumDataEnc::None, EnumDataComp::None)?;
+        writer.add_column_header("temperature", EnumDataType::Int8, EnumDataEnc::None, EnumDataComp::None)
+          .map_err(|e: String| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
         let column_data: Vec<i8> = vec![20, 22, 21, 23];
-        writer.add_column_data(column_data, EnumDataEnc::None, EnumDataComp::None)?;
+        writer.add_column_data(column_data, EnumDataEnc::None, EnumDataComp::None)
+          .map_err(|e: String| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
         writer.save()?;
 

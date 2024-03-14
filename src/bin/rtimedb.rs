@@ -78,7 +78,8 @@ fn create_time_series_db(file_path: &str, input_file: &str) -> io::Result<()> {
         .from_reader(BufReader::new(csv_file));
 
     let mut tsf_writer: TSFWriter = TSFWriter::new(file_path)?;
-    tsf_writer.add_column_header("temperature", EnumDataType::Int8, EnumDataEnc::None, EnumDataComp::None)?;
+    tsf_writer.add_column_header("temperature", EnumDataType::Int8, EnumDataEnc::None, EnumDataComp::None)
+        .map_err(|e: String| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
     let mut temperatures: Vec<i8> = Vec::new();
 
@@ -90,8 +91,9 @@ fn create_time_series_db(file_path: &str, input_file: &str) -> io::Result<()> {
         }
     }
 
-    tsf_writer.add_column_data(temperatures, EnumDataEnc::None, EnumDataComp::None)?;
-    tsf_writer.save()?;
+    tsf_writer.add_column_data(temperatures, EnumDataEnc::None, EnumDataComp::None)
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    tsf_writer.try_save()?;
 
     println!("Created TimeSeriesFile");
     Ok(())

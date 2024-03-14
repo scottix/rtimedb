@@ -1,6 +1,6 @@
 use std::{fs::{File, OpenOptions}, io, path::Path};
 
-use tracing::{info, warn, debug, Level};
+use tracing::debug;
 
 use super::header::FileHeader;
 use super::segments::data::{EnumColumnData, SegmentData};
@@ -103,6 +103,16 @@ impl TSFReader {
             }
         },
         EnumColumnData::BooleanVec(data) => {
+            for value in data {
+                println!("{}", value);
+            }
+        },
+        EnumColumnData::DateTime32Vec(data) => {
+          for value in data {
+              println!("{}", value);
+          }
+        },
+        EnumColumnData::DateTime64Vec(data) => {
             for value in data {
                 println!("{}", value);
             }
