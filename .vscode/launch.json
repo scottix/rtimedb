@@ -1,0 +1,25 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug Read",
+      "program": "${workspaceFolder}/target/debug/rtimedb",
+      "args": [
+        "read", "test_data_10.tsf"
+      ],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+        "type": "lldb",
+        "request": "launch",
+        "name": "Debug Create",
+        "program": "${workspaceFolder}/target/debug/rtimedb",
+        "args": [
+          "create", "-i", "test_data_10.csv", "test_data_10.tsf"
+        ],
+        "cwd": "${workspaceFolder}"
+    }
+  ]
+}

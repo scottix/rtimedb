@@ -42,7 +42,7 @@ impl TSFWriter {
     })
   }
 
-  pub fn add_column_header(&mut self, column_name: &str, column_type: EnumDataType, encoding: EnumDataEnc, compression: EnumDataComp) -> Result<(), String> {
+  pub fn add_column_header(&mut self, column_name: &str, column_type: EnumDataType, encoding: EnumDataEnc, compression: EnumDataComp, ts_column: bool) -> Result<(), String> {
     let header: SegmentColumnHeader = SegmentColumnHeader::new(
       column_name.to_string(),
       column_type,
@@ -50,7 +50,7 @@ impl TSFWriter {
       compression,
     );
     
-    self.segment_data.add_column_header(header, false)?;
+    self.segment_data.add_column_header(header, ts_column)?;
 
     Ok(())
   }
@@ -68,6 +68,10 @@ impl TSFWriter {
       self.segment_data.add_column_data(data_segment)?;
 
       Ok(())
+  }
+
+  pub fn update_segment_dates(&mut self, date_start: i64, date_end: i64) {
+    self.segment_data.update_header_dates(date_start, date_end);
   }
 
   pub fn try_save(&mut self) -> io::Result<()> {
@@ -97,58 +101,66 @@ impl Drop for TSFWriter {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use std::io::Read;
-    use tempfile::NamedTempFile;
+  use super::*;
+  use std::io::Read;
+  use tempfile::NamedTempFile;
 
-    #[test]
-    fn test_tsf_writer_new() -> io::Result<()> {
-        let temp_file: NamedTempFile = NamedTempFile::new()?;
-        let file_path: &str = temp_file.path().to_str().unwrap();
+  #[test]
+  fn test_tsf_writer_new() -> io::Result<()> {
+    let temp_file: NamedTempFile = NamedTempFile::new()?;
+    let file_path: &str = temp_file.path().to_str().unwrap();
 
-        let writer_result: Result<TSFWriter, io::Error> = TSFWriter::new(file_path);
-        assert!(writer_result.is_ok());
+    let writer_result: Result<TSFWriter, io::Error> = TSFWriter::new(file_path);
+    assert!(writer_result.is_ok());
 
-        Ok(())
-    }
+    Ok(())
+  }
 
-    #[test]
-    fn test_add_column_header() -> io::Result<()> {
-        let temp_file: NamedTempFile = NamedTempFile::new()?;
-        let file_path: &str = temp_file.path().to_str().unwrap();
+  #[test]
+  fn test_add_column_header() -> io::Result<()> {
+    let temp_file: NamedTempFile = NamedTempFile::new()?;
+    let file_path: &str = temp_file.path().to_str().unwrap();
 
-        let mut writer: TSFWriter = TSFWriter::new(file_path)?;
-        writer.add_column_header("temperature", EnumDataType::Int8, EnumDataEnc::None, EnumDataComp::None)
-          .map_err(|e: String| io::Error::new(io::ErrorKind::InvalidData, e))?;
-        assert_eq!(writer.segment_data.get_column_count(), 1);
+    let mut writer: TSFWriter = TSFWriter::new(file_path)?;
+    writer.add_column_header("temperature", EnumDataType::Int8, EnumDataEnc::None, EnumDataComp::None, false)
+      .map_err(|e: String| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    assert_eq!(writer.segment_data.get_column_count(), 1);
 
-        Ok(())
-    }
+    Ok(())
+  }
 
-    #[test]
-    fn test_add_column_data_and_save() -> io::Result<()> {
-        let temp_file: NamedTempFile = NamedTempFile::new()?;
-        let file_path: &str = temp_file.path().to_str().unwrap();
+  #[test]
+  fn test_add_column_data_and_save() -> io::Result<()> {
+    let temp_file: NamedTempFile = NamedTempFile::new()?;
+    let file_path: &str = temp_file.path().to_str().unwrap();
 
-        let mut writer: TSFWriter = TSFWriter::new(file_path)?;
-        writer.add_column_header("temperature", EnumDataType::Int8, EnumDataEnc::None, EnumDataComp::None)
-          .map_err(|e: String| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    let mut writer: TSFWriter = TSFWriter::new(file_path)?;
+    writer.add_column_header("metric_time", EnumDataType::DateTime32, EnumDataEnc::None, EnumDataComp::None, true)
+      .map_err(|e: String| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    writer.add_column_header("temperature", EnumDataType::Int8, EnumDataEnc::None, EnumDataComp::None, false)
+      .map_err(|e: String| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
-        let column_data: Vec<i8> = vec![20, 22, 21, 23];
-        writer.add_column_data(column_data, EnumDataEnc::None, EnumDataComp::None)
-          .map_err(|e: String| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    let time_data: Vec<i32> = vec![1710555318, 1710555319, 1710555320, 1710555321];
+    writer.add_column_data(time_data, EnumDataEnc::None, EnumDataComp::None)
+      .map_err(|e: String| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
-        writer.save()?;
+    let column_data: Vec<i8> = vec![20, 22, 21, 23];
+    writer.add_column_data(column_data, EnumDataEnc::None, EnumDataComp::None)
+      .map_err(|e: String| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
-        // Open the file again and verify its contents
-        let mut file: File = File::open(file_path)?;
-        let mut contents: Vec<u8> = Vec::new();
-        file.read_to_end(&mut contents)?;
+    writer.update_segment_dates(1710555318, 1710555321);
 
-        // Check that the file isn't empty, for a more detailed check, 
-        // you'll need to deserialize the data and compare
-        assert!(!contents.is_empty());
+    writer.save()?;
 
-        Ok(())
-    }
+    // Open the file again and verify its contents
+    let mut file: File = File::open(file_path)?;
+    let mut contents: Vec<u8> = Vec::new();
+    file.read_to_end(&mut contents)?;
+
+    // Check that the file isn't empty, for a more detailed check, 
+    // you'll need to deserialize the data and compare
+    assert!(!contents.is_empty());
+
+    Ok(())
+  }
 }

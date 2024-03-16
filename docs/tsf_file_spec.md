@@ -33,7 +33,7 @@ The file can have multiple segments appended to it. This aids in the ability to 
 
 The Segment header gives metadata and how to read the data
 
-+-----u8----+-----u32-----+---u8x16---+-----u64----+----u64---+----u32----+------u16-----+----u16----+--------u32---------+------(n)-------+------u8x8-----+
++-----u8----+-----u32-----+---u8x16---+-----i64----+----i64---+----u32----+------u16-----+----u16----+--------u32---------+------(n)-------+------u8x8-----+
 | tombstone | next_offset | uuid_txid | date_start | date_end | row_count | column_count | ts_column | column_header_size | column_headers | segment_check |
 +-----------+-------------+-----------+------------+----------+-----------+--------------+-----------+--------------------+----------------+---------------+
 

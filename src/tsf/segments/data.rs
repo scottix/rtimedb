@@ -73,6 +73,8 @@ impl SegmentData {
 
     let data_row_count: usize = match &data.data {
       EnumColumnData::Int8Vec(vec) => vec.len(),
+      EnumColumnData::Int16Vec(vec) => vec.len(),
+      EnumColumnData::Int32Vec(vec) => vec.len(),
       // @TODO Add cases for other data types...
       _ => 0,
     };
@@ -95,6 +97,11 @@ impl SegmentData {
     self.data.push(data);
 
     Ok(())
+  }
+
+  pub fn update_header_dates(&mut self, date_start: i64, date_end: i64) {
+    self.data_header.set_date_start(date_start);
+    self.data_header.set_date_end(date_end);
   }
 
   // Writes the SegmentData to a file, including the header and data.
@@ -166,8 +173,8 @@ pub struct SegmentDataHeader {
   tombstone: bool,
   next_offset: Option<u32>,
   uuid_txid: Option<[u8; 16]>,
-  date_start: Option<u64>,
-  date_end: Option<u64>,
+  date_start: Option<i64>,
+  date_end: Option<i64>,
   row_count: u32,
   column_count: u16,
   ts_column: Option<u16>,
@@ -206,6 +213,14 @@ impl SegmentDataHeader {
     Ok(())
   }
 
+  fn set_date_start(&mut self, date_start: i64) {
+    self.date_start = Some(date_start);
+  }
+
+  fn set_date_end(&mut self, date_end: i64) {
+    self.date_end = Some(date_end);
+  }
+
   fn calculate_header_size(&self) -> u32 {
     trace!("SegmentDataHeader::calculate_header_size");
 
@@ -216,7 +231,23 @@ impl SegmentDataHeader {
     fixed_size + self.column_header_size
   }
 
-  fn write_header(&self, file: &mut File) -> io::Result<()> {
+  fn calculate_checksum(&self) -> [u8; 8] {
+    // @TODO xxhash64
+    let dummy_checksum: [u8; 8] = [0xBB; 8]; // Placeholder checksum value
+    dummy_checksum
+  }
+
+  fn update_segment_check(&mut self) {
+    // @TODO update segment_check
+    self.segment_check = Some(self.calculate_checksum());
+  }
+
+  fn verify_segment_check(&self) -> bool {
+    // @TODO add checker
+    return true;
+  }
+
+  fn write_header(&mut self, file: &mut File) -> io::Result<()> {
     trace!("SegmentDataHeader::write_header");
 
     let mut buffer: Vec<u8> = Vec::new();
@@ -234,12 +265,12 @@ impl SegmentDataHeader {
     }
 
     match self.date_start {
-      Some(date_start) => buffer.write_u64::<LittleEndian>(date_start)?,
+      Some(date_start) => buffer.write_i64::<LittleEndian>(date_start)?,
       None => return Err(io::Error::new(io::ErrorKind::InvalidInput, "date_start was not set")),
     }
 
     match self.date_end {
-      Some(date_end) => buffer.write_u64::<LittleEndian>(date_end)?,
+      Some(date_end) => buffer.write_i64::<LittleEndian>(date_end)?,
       None => return Err(io::Error::new(io::ErrorKind::InvalidInput, "date_end was not set")),
     }
 
@@ -265,6 +296,8 @@ impl SegmentDataHeader {
     // Append the serialized column headers
     buffer.extend_from_slice(&column_headers_buffer);
 
+    self.update_segment_check();
+
     // Writes the segment check
     match self.segment_check {
       Some(segment_check) => buffer.extend_from_slice(&segment_check),
@@ -288,8 +321,8 @@ impl SegmentDataHeader {
     let mut uuid_txid_arr: [u8; 16] = [0; 16];
     cursor.read_exact(&mut uuid_txid_arr)?;
     self.uuid_txid = Some(uuid_txid_arr);
-    self.date_start = Some(cursor.read_u64::<LittleEndian>()?);
-    self.date_end = Some(cursor.read_u64::<LittleEndian>()?);
+    self.date_start = Some(cursor.read_i64::<LittleEndian>()?);
+    self.date_end = Some(cursor.read_i64::<LittleEndian>()?);
     self.row_count = cursor.read_u32::<LittleEndian>()?;
     self.column_count = cursor.read_u16::<LittleEndian>()?;
     self.ts_column = Some(cursor.read_u16::<LittleEndian>()?);
@@ -569,6 +602,12 @@ impl ColumnDataCreator for i8 {
 impl ColumnDataCreator for i16 {
   fn create_segment_column_data(column: Vec<Self>, encoding: EnumDataEnc, compression: EnumDataComp) -> SegmentColumnData {
     SegmentColumnData::new_int16_vec(column, encoding, compression)
+  }
+}
+
+impl ColumnDataCreator for i32 {
+  fn create_segment_column_data(column: Vec<Self>, encoding: EnumDataEnc, compression: EnumDataComp) -> SegmentColumnData {
+    SegmentColumnData::new_int32_vec(column, encoding, compression)
   }
 }
 
@@ -1056,18 +1095,18 @@ mod tests {
   #[test]
   fn test_write_and_read_header() -> io::Result<()> {
     // Setup: Create a SegmentDataHeader with test data
-    let header: SegmentDataHeader = SegmentDataHeader {
+    let mut header: SegmentDataHeader = SegmentDataHeader {
       tombstone: true,
       next_offset: Some(123),
       uuid_txid: Some([0xAA; 16]),
       date_start: Some(1625097600),
       date_end: Some(1627689600),
       row_count: 10,
-      column_count: 0,
-      ts_column: Some(0),
-      column_header_size: 0,
+      column_count: 5,
+      ts_column: Some(3),
+      column_header_size: 0, // This gets overwritten
       column_headers: vec![],
-      segment_check: Some([0xBB; 8]),
+      segment_check: Some([0xBB; 8]), // This gets overwritten
     };
 
     // Write the header to a temporary file
@@ -1083,14 +1122,14 @@ mod tests {
     let read_next_offset: u32 = file.read_u32::<LittleEndian>()?;
     let mut read_uuid_txid: [u8; 16] = [0u8; 16];
     file.read_exact(&mut read_uuid_txid)?;
-    let read_date_start: u64 = file.read_u64::<LittleEndian>()?;
-    let read_date_end: u64 = file.read_u64::<LittleEndian>()?;
+    let read_date_start: i64 = file.read_i64::<LittleEndian>()?;
+    let read_date_end: i64 = file.read_i64::<LittleEndian>()?;
     let read_row_count: u32 = file.read_u32::<LittleEndian>()?;
     let read_column_count: u16 = file.read_u16::<LittleEndian>()?;
     let read_ts_column: u16 = file.read_u16::<LittleEndian>()?;
     let read_column_header_size: u32 = file.read_u32::<LittleEndian>()?;
     // For column_headers, you would read and deserialize them here based on read_column_count and read_column_header_size
-    let mut read_segment_check: [u8; 8] = [0u8; 8];
+    let mut read_segment_check: [u8; 8] = [0; 8];
     file.read_exact(&mut read_segment_check)?;
 
     // Verify the data read matches what was written
@@ -1100,8 +1139,8 @@ mod tests {
     assert_eq!(read_date_start, 1625097600);
     assert_eq!(read_date_end, 1627689600);
     assert_eq!(read_row_count, 10);
-    assert_eq!(read_column_count, 0);
-    assert_eq!(read_ts_column, 0);
+    assert_eq!(read_column_count, 5);
+    assert_eq!(read_ts_column, 3);
     assert_eq!(read_column_header_size, 0);
     assert_eq!(read_segment_check, [0xBB; 8]);
 
@@ -1153,8 +1192,8 @@ mod tests {
       let row_count: u32 = 10;
       let column_count: u16 = 0;
       let ts_column: u16 = 0;
-      let column_header_size: u32 = 0; // Simplified, assuming no column headers for this test
-      let segment_check: [u8; 8] = [0xBB; 8]; // Example checksum
+      let column_header_size: u32 = 0;
+      let segment_check: [u8; 8] = [0xBB; 8];
 
       // Write these values to the tempfile
       file.write_all(&[tombstone])?;

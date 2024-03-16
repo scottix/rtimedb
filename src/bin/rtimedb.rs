@@ -78,21 +78,39 @@ fn create_time_series_db(file_path: &str, input_file: &str) -> io::Result<()> {
         .from_reader(BufReader::new(csv_file));
 
     let mut tsf_writer: TSFWriter = TSFWriter::new(file_path)?;
-    tsf_writer.add_column_header("temperature", EnumDataType::Int8, EnumDataEnc::None, EnumDataComp::None)
+    tsf_writer.add_column_header("metric_time", EnumDataType::Int32, EnumDataEnc::None, EnumDataComp::None, true)
+        .map_err(|e: String| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    tsf_writer.add_column_header("temperature", EnumDataType::Int8, EnumDataEnc::None, EnumDataComp::None, false)
         .map_err(|e: String| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
+    let mut metric_time: Vec<i32> = Vec::new();
     let mut temperatures: Vec<i8> = Vec::new();
 
     for result in rdr.records() {
-        let record: csv::StringRecord = result?;
-        // Assuming the first column in the CSV is temperature
-        if let Ok(temp) = record.get(0).unwrap_or("0").parse::<i8>() {
-            temperatures.push(temp);
-        }
+        let record: csv::StringRecord = result.map_err(|e: csv::Error| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    
+        let time = record.get(0)
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Missing time value"))
+            .and_then(|t: &str| t.parse::<i32>().map_err(|e: std::num::ParseIntError| io::Error::new(io::ErrorKind::InvalidData, e)))?;
+    
+        let temp = record.get(1)
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Missing temperature value"))
+            .and_then(|t: &str| t.parse::<i8>().map_err(|e: std::num::ParseIntError| io::Error::new(io::ErrorKind::InvalidData, e)))?;
+    
+        metric_time.push(time);
+        temperatures.push(temp);
     }
 
+    let min_date: i32 = *metric_time.iter().min().expect("Timestamp data should not be empty");
+    let max_date: i32 = *metric_time.iter().max().expect("Timestamp data should not be empty");
+
+    tsf_writer.add_column_data(metric_time, EnumDataEnc::None, EnumDataComp::None)
+        .map_err(|e: String| io::Error::new(io::ErrorKind::InvalidData, e))?;
     tsf_writer.add_column_data(temperatures, EnumDataEnc::None, EnumDataComp::None)
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        .map_err(|e: String| io::Error::new(io::ErrorKind::InvalidData, e))?;
+
+    tsf_writer.update_segment_dates(min_date as i64, max_date as i64);
+
     tsf_writer.try_save()?;
 
     println!("Created TimeSeriesFile");
