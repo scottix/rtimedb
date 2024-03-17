@@ -1,0 +1,24 @@
+graph TD;
+    Client[("Client")] -->|Sends SQL Query| rtimedb[("rtimedb Server")]
+    rtimedb -->|Receives SQL queries| SQLParser[("SQL AST Parser")]
+    SQLParser -->|Parses| AST[("Abstract Syntax Tree")]
+    AST --> Planner[("Query Planner")]
+    Planner -->|Generates execution plan| Plan[("Execution Plan")]
+    Plan --> Executor[("Query Executor")]
+
+    subgraph sei["Storage Engine Interface"]
+        Interface[("Async Access Interface")]
+        TSFManager[("TSF File Manager")]
+        IndexManager[("Index Manager")]
+    end
+
+    Interface --> TSFManager
+    Interface --> IndexManager
+
+    TSFManager -->|Reads/Writes| TSFFiles[("TSF Files")]
+    IndexManager -->|Reads/Writes| IndexFiles[("Index Files")]
+
+    Executor -->|Queries Data Through| Interface
+
+    Executor -->|Returns Results| rtimedb
+    rtimedb -->|Sends Results Back| Client

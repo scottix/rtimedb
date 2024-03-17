@@ -4,6 +4,8 @@ use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use tracing::trace;
 use uuid7;
 
+use super::types::{ColumnMeta, EnumColumnData, EnumDataComp, EnumDataEnc, EnumDataType};
+
 #[repr(C)]
 pub struct SegmentData {
   data_header: SegmentDataHeader,
@@ -40,16 +42,22 @@ impl SegmentData {
     self
   }
 
-  pub fn get_column_count(&self) -> u16 {
+  pub fn get_column_count(&self) -> usize {
     trace!("SegmentData::get_column_count");
 
-    self.data_header.column_count
+    self.data_header.column_count as usize
+  }
+
+  pub fn get_row_count(&self) -> usize {
+    trace!("SegmentData::get_column_count");
+
+    self.data_header.row_count as usize
   }
 
   pub fn get_segment_data<'a>(&'a self, index: usize) -> Option<&'a SegmentColumnData> {
     trace!("SegmentData::get_segment_data");
 
-    return self.data.get(index);
+    self.data.get(index)
   }
 
   pub fn add_column_header(&mut self, column_header: SegmentColumnHeader, ts_column: bool) -> Result<(), String> {
@@ -481,112 +489,6 @@ impl SegmentColumnHeader {
   }
 }
 
-#[repr(u16)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum EnumDataType {
-  // Integers
-  Int8 = 1,
-  Int16 = 2,
-  Int32 = 3,
-  Int64 = 4,
-  // Int128 = 5,
-  // Unsigned Integers
-  UInt8 = 6,
-  UInt16 = 7,
-  UInt32 = 8,
-  UInt64 = 9,
-  // UInt128 = 10,
-  // Floats
-  Float32 = 11,
-  Float64 = 12,
-  // Boolean
-  Boolean = 13,
-  // String
-  // String = 14,
-  DateTime32 = 16,
-  DateTime64 = 17
-  // UUID
-  // Map
-  // Array
-  // Tuple
-  // IP
-  // etc...
-}
-
-impl EnumDataType {
-  fn from_u16(value: u16) -> Option<Self> {
-    match value {
-      1 => Some(EnumDataType::Int8),
-      2 => Some(EnumDataType::Int16),
-      3 => Some(EnumDataType::Int32),
-      4 => Some(EnumDataType::Int64),
-      6 => Some(EnumDataType::UInt8),
-      7 => Some(EnumDataType::UInt16),
-      8 => Some(EnumDataType::UInt32),
-      9 => Some(EnumDataType::UInt64),
-      11 => Some(EnumDataType::Float32),
-      12 => Some(EnumDataType::Float64),
-      13 => Some(EnumDataType::Boolean),
-      16 => Some(EnumDataType::DateTime32),
-      17 => Some(EnumDataType::DateTime64),
-      _ => None,
-    }
-  }
-}
-
-#[derive(Debug, PartialEq, Eq)]
-enum ColumnMeta {
-  None,
-  Decimal { precision: u32, scale: u32 },
-  Enum { mappings: Vec<String> },
-  DateTime { format: String },
-  Text { encoding: String },
-}
-
-impl Default for ColumnMeta {
-  fn default() -> Self {
-      ColumnMeta::None
-  }
-}
-
-#[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum EnumDataEnc {
-  // Types of Encoding
-  None = 0,
-  Delta = 1,
-  DoubleDelta = 2,
-}
-
-impl EnumDataEnc {
-  fn from_u8(value: u8) -> Option<Self> {
-    match value {
-      0 => Some(EnumDataEnc::None),
-      1 => Some(EnumDataEnc::Delta),
-      2 => Some(EnumDataEnc::DoubleDelta),
-      _ => None,
-    }
-  }
-}
-
-#[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum EnumDataComp {
-  // Types of Compression
-  None = 0,
-  ZStd = 1,
-}
-
-impl EnumDataComp {
-  fn from_u8(value: u8) -> Option<Self> {
-    match value {
-      0 => Some(EnumDataComp::None),
-      1 => Some(EnumDataComp::ZStd),
-      _ => None,
-    }
-  }
-}
-
 pub trait ColumnDataCreator {
   fn create_segment_column_data(column: Vec<Self>, encoding: EnumDataEnc, compression: EnumDataComp) -> SegmentColumnData
   where
@@ -619,6 +521,10 @@ pub struct SegmentColumnData {
 }
 
 impl SegmentColumnData {
+  pub fn get_data<'a>(&'a self) -> Option<&'a EnumColumnData> {
+    Some(&self.data)
+  }
+
   pub fn new(data_type: EnumDataType, encoding: EnumDataEnc, compression: EnumDataComp) -> Self {
     trace!("SegmentColumnData::new");
     SegmentColumnData {
@@ -1045,45 +951,6 @@ impl SegmentColumnData {
     Ok(())
   }
 
-}
-
-#[derive(Debug, Clone)]
-pub enum EnumColumnData {
-  Int8Vec(Vec<i8>),
-  Int16Vec(Vec<i16>),
-  Int32Vec(Vec<i32>),
-  Int64Vec(Vec<i64>),
-  UInt8Vec(Vec<u8>),
-  UInt16Vec(Vec<u16>),
-  UInt32Vec(Vec<u32>),
-  UInt64Vec(Vec<u64>),
-  Float32Vec(Vec<f32>),
-  Float64Vec(Vec<f64>),
-  BooleanVec(Vec<bool>),
-  DateTime32Vec(Vec<i32>),
-  DateTime64Vec(Vec<i64>),
-  // StringVec(Vec<String>),
-}
-
-impl EnumColumnData {
-  pub fn from_enum_data_type(data_type: EnumDataType) -> EnumColumnData {
-    match data_type {
-      EnumDataType::Int8 => EnumColumnData::Int8Vec(Vec::new()),
-      EnumDataType::Int16 => EnumColumnData::Int16Vec(Vec::new()),
-      EnumDataType::Int32 => EnumColumnData::Int32Vec(Vec::new()),
-      EnumDataType::Int64 => EnumColumnData::Int64Vec(Vec::new()),
-      EnumDataType::UInt8 => EnumColumnData::UInt8Vec(Vec::new()),
-      EnumDataType::UInt16 => EnumColumnData::UInt16Vec(Vec::new()),
-      EnumDataType::UInt32 => EnumColumnData::UInt32Vec(Vec::new()),
-      EnumDataType::UInt64 => EnumColumnData::UInt64Vec(Vec::new()),
-      EnumDataType::Float32 => EnumColumnData::Float32Vec(Vec::new()),
-      EnumDataType::Float64 => EnumColumnData::Float64Vec(Vec::new()),
-      EnumDataType::Boolean => EnumColumnData::BooleanVec(Vec::new()),
-      EnumDataType::DateTime32 => EnumColumnData::DateTime32Vec(Vec::new()),
-      EnumDataType::DateTime64 => EnumColumnData::DateTime64Vec(Vec::new()),
-      // Add cases for other data types as needed...
-    }
-  }
 }
 
 #[cfg(test)]

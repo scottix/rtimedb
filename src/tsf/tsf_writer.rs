@@ -1,7 +1,7 @@
 use std::{fs::{self, File, OpenOptions}, io, path::PathBuf};
 
 use super::header::FileHeader;
-use super::segments::data::{ColumnDataCreator, SegmentData, SegmentColumnHeader, SegmentColumnData, EnumDataType, EnumDataEnc, EnumDataComp};
+use super::segments::{data::{ColumnDataCreator, SegmentData, SegmentColumnHeader, SegmentColumnData}, types::{EnumDataType, EnumDataEnc, EnumDataComp}};
 
 pub struct TSFWriter {
   file: File,
