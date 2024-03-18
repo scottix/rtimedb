@@ -5,7 +5,7 @@ use tokio_stream::StreamExt;
 use tracing::trace;
 
 use super::header::FileHeader;
-use super::segments::{data::SegmentData, types::{EnumColumnData, EnumDataValue}};
+use super::segments::{segment_data::SegmentData, types::{EnumColumnData, EnumDataValue}};
 
 #[derive(Debug)]
 pub struct DataRow {

@@ -1,4 +1,5 @@
 use std::io;
+use std::pin::Pin;
 
 use chrono::{DateTime, Utc};
 use futures::Stream;
@@ -35,7 +36,7 @@ impl Executor {
 
     reader.read_all().map_err(|e: io::Error| e.to_string())?;
 
-    let mut stream: std::pin::Pin<Box<dyn Stream<Item = Result<DataRow, io::Error>> + Send>> = reader.stream_rows();
+    let mut stream: Pin<Box<dyn Stream<Item = Result<DataRow, io::Error>> + Send>> = reader.stream_rows();
     let mut result: Vec<Vec<EnumDataValue>> = vec![];
     while let Some(row_result) = stream.next().await {
       match row_result {
