@@ -33,11 +33,14 @@ The file can have multiple segments appended to it. This aids in the ability to 
 
 The Segment header gives metadata and how to read the data
 
-+-----u8----+-----u32-----+---u8x16---+-----i64----+----i64---+----u32----+------u16-----+----u16----+--------u32---------+------(n)-------+------u8x8-----+
-| tombstone | next_offset | uuid_txid | date_start | date_end | row_count | column_count | ts_column | column_header_size | column_headers | segment_check |
-+-----------+-------------+-----------+------------+----------+-----------+--------------+-----------+--------------------+----------------+---------------+
++---u8--+-----u32-----+---u8x16---+-----i64----+----i64---+----u32----+------u16-----+----u16----+--------u32---------+------(n)-------+------u8x8-----+
+| state | next_offset | uuid_txid | date_start | date_end | row_count | column_count | ts_column | column_header_size | column_headers | segment_check |
++-------+-------------+-----------+------------+----------+-----------+--------------+-----------+--------------------+----------------+---------------+
 
-* tombstone - Tells us when a segment has been marked for deletion, this allows a system to either ignore the data or schedule a time to remove it.
+* state - Various state the segment can be in
+  * Active - Current segment available for reading
+  * Creating - Writing to file currently
+  * Deleted - Marked for removal
 * next_offset - amount of bytes to next segment header
 * uuid_txid - uuidv7 timestamp of the start of a transaction to make it unique against the file.
 * date_start - UTS of the start range of data

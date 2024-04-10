@@ -19,11 +19,25 @@ impl Executor {
   pub async fn execute(&self, plan: PhysicalPlan) -> Result<Vec<Vec<EnumDataValue>>, String> {
     self.execute_operator(&plan.root_operator).await
   }
+
+  pub async fn execute_async(&self, plan: PhysicalPlan) -> Result<Vec<Vec<EnumDataValue>>, String> {
+    self.execute_operator(&plan.root_operator).await
+  }
   
   pub async fn execute_operator(&self, operator: &PhysicalOperator) -> Result<Vec<Vec<EnumDataValue>>, String> {
     match operator {
       PhysicalOperator::Scan { columns, table_name, time_range } => {
         self.execute_scan(columns, table_name, time_range).await
+      },
+      PhysicalOperator::Aggregate { input, columns, function, time_bucket } => {Err("Not Implemented".to_string())},
+      PhysicalOperator::Join { join_type, left, right, condition } => {Err("Not Implemented".to_string())}
+    }
+  }
+
+  pub async fn async_execute_operator(&self, operator: &PhysicalOperator) -> Result<Vec<Vec<EnumDataValue>>, String> {
+    match operator {
+      PhysicalOperator::Scan { columns, table_name, time_range } => {
+        self.async_execute_scan(columns, table_name, time_range).await
       },
       PhysicalOperator::Aggregate { input, columns, function, time_bucket } => {Err("Not Implemented".to_string())},
       PhysicalOperator::Join { join_type, left, right, condition } => {Err("Not Implemented".to_string())}
@@ -37,6 +51,27 @@ impl Executor {
     reader.read_all().map_err(|e: io::Error| e.to_string())?;
 
     let mut stream: Pin<Box<dyn Stream<Item = Result<DataRow, io::Error>> + Send>> = reader.stream_rows();
+    let mut result: Vec<Vec<EnumDataValue>> = vec![];
+    while let Some(row_result) = stream.next().await {
+      match row_result {
+        Ok(data_row) => {
+          let row: Vec<EnumDataValue> = data_row.values;
+          result.push(row);
+        },
+        Err(_) => return Err("Failed to fetch row".to_string()),
+      }
+    }
+
+    Ok(result)
+  }
+
+  async fn async_execute_scan(&self, _columns: &Vec<String>, _table_name: &String, _time_range: &Option<(DateTime<Utc>, DateTime<Utc>)>) -> Result<Vec<Vec<EnumDataValue>>, String> {
+    let mut reader: crate::tsf::async_tsf_reader::AsyncTSFReader = crate::tsf::async_tsf_reader::AsyncTSFReader::new(_table_name).await
+      .map_err(|_| "Failed to read table_name".to_string())?;
+
+    reader.read_all().await.map_err(|e: io::Error| e.to_string())?;
+
+    let mut stream: Pin<Box<dyn Stream<Item = Result<crate::tsf::async_tsf_reader::DataRow, io::Error>> + Send>> = reader.stream_rows();
     let mut result: Vec<Vec<EnumDataValue>> = vec![];
     while let Some(row_result) = stream.next().await {
       match row_result {

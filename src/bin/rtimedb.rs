@@ -57,6 +57,14 @@ async fn main() -> Result<(), String> {
                     .help("The file path of the database to read from")
                     .required(true)
                     .index(1)),
+        )
+        .subcommand(
+            Command::new("astream")
+                .about("Async streams data from a time series database")
+                .arg(Arg::new("FILE")
+                    .help("The file path of the database to read from")
+                    .required(true)
+                    .index(1)),
         );
 
     let matches: clap::ArgMatches = app.get_matches();
@@ -82,6 +90,12 @@ async fn main() -> Result<(), String> {
                 .get_one::<String>("FILE")
                 .expect("FILE argument missing");
             return stream_time_series_db(file_path).await;
+        },
+        Some(("astream", sub_matches)) => {
+            let file_path: &String = sub_matches
+                .get_one::<String>("FILE")
+                .expect("FILE argument missing");
+            return astream_time_series_db(file_path).await;
         },
         _ => Ok(()),
     }
@@ -154,6 +168,28 @@ async fn stream_time_series_db(file_path: &str) -> Result<(), String> {
     
     let tsf_executor: Executor = Executor{};
     let result: Vec<Vec<rtimedb::tsf::segments::types::EnumDataValue>> = tsf_executor.execute(plan).await?;
+
+    for row in result {
+        println!("{},{}", row[0], row[1]);
+    }
+
+    info!("Data read successfully.");
+    Ok(())
+}
+
+async fn astream_time_series_db(file_path: &str) -> Result<(), String> {
+    info!("Reading from the database at: {}", file_path);
+
+    let plan: PhysicalPlan = PhysicalPlan{
+        root_operator: PhysicalOperator::Scan {
+            columns: vec!("metric_time".to_string(), "temperature".to_string()),
+            table_name: file_path.to_string(),
+            time_range: None
+        }
+    };
+    
+    let tsf_executor: Executor = Executor{};
+    let result: Vec<Vec<rtimedb::tsf::segments::types::EnumDataValue>> = tsf_executor.execute_async(plan).await?;
 
     for row in result {
         println!("{},{}", row[0], row[1]);
