@@ -4,8 +4,6 @@ use tokio::fs::File;
 use tracing::trace;
 use uuid7;
 
-use crate::tsf::header;
-
 use super::async_column_data::SegmentColumnData;
 use super::async_data_header::{SegmentColumnHeader, SegmentDataHeader};
 use super::types::EnumColumnData;

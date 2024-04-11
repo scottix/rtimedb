@@ -9,7 +9,8 @@
       "args": [
         "read", "test_data_10.tsf"
       ],
-      "cwd": "${workspaceFolder}"
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "cargo build (debug)"
     },
     {
         "type": "lldb",
@@ -19,7 +20,8 @@
         "args": [
           "create", "-i", "test_data_10.csv", "test_data_10.tsf"
         ],
-        "cwd": "${workspaceFolder}"
+        "cwd": "${workspaceFolder}",
+        "preLaunchTask": "cargo build (debug)"
     },
     {
       "type": "lldb",
@@ -29,7 +31,8 @@
       "args": [
         "stream", "test_data_10.tsf"
       ],
-      "cwd": "${workspaceFolder}"
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "cargo build (debug)"
     },
     {
       "type": "lldb",
@@ -39,7 +42,8 @@
       "args": [
         "astream", "test_data_10.tsf"
       ],
-      "cwd": "${workspaceFolder}"
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "cargo build (debug)"
     },
   ]
 }
