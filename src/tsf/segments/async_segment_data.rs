@@ -4,6 +4,8 @@ use tokio::fs::File;
 use tracing::trace;
 use uuid7;
 
+use crate::tsf::header;
+
 use super::async_column_data::SegmentColumnData;
 use super::async_data_header::{SegmentColumnHeader, SegmentDataHeader};
 use super::types::EnumColumnData;
@@ -47,7 +49,8 @@ impl SegmentData {
   }
 
   pub fn get_column_data_pos(&self) -> usize {
-    return self.data_pos + self.data_header.calculate_header_size();
+    // File Header + Size of Header + data_position
+    return 6 + self.data_header.calculate_header_size() + self.data_pos;
   }
 
   pub fn get_segment_data<'a>(&'a self, index: usize) -> Option<&'a SegmentColumnData> {

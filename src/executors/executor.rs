@@ -21,7 +21,7 @@ impl Executor {
   }
 
   pub async fn execute_async(&self, plan: PhysicalPlan) -> Result<Vec<Vec<EnumDataValue>>, String> {
-    self.execute_operator(&plan.root_operator).await
+    self.async_execute_operator(&plan.root_operator).await
   }
   
   pub async fn execute_operator(&self, operator: &PhysicalOperator) -> Result<Vec<Vec<EnumDataValue>>, String> {

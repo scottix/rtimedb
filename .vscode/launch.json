@@ -20,6 +20,26 @@
           "create", "-i", "test_data_10.csv", "test_data_10.tsf"
         ],
         "cwd": "${workspaceFolder}"
-    }
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug stream",
+      "program": "${workspaceFolder}/target/debug/rtimedb",
+      "args": [
+        "stream", "test_data_10.tsf"
+      ],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug astream",
+      "program": "${workspaceFolder}/target/debug/rtimedb",
+      "args": [
+        "astream", "test_data_10.tsf"
+      ],
+      "cwd": "${workspaceFolder}"
+    },
   ]
 }
